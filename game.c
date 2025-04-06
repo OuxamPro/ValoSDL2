@@ -161,6 +161,7 @@ void insertScore(MYSQL *con, const char* nom, int time, const char* difficulte);
 void selectDifficulty();
 void selectCharacter();
 void displayPauseMenu();
+void displayTutorial();
 
 SDL_Texture* loadTexture(const char* path) {
     SDL_Surface* surface = IMG_Load(path);
@@ -815,6 +816,121 @@ void startGame() {
     Mix_HaltMusic();
 }
 
+void displayTutorial() {
+    bool running = true;
+    SDL_Event event;
+    SDL_Color textColor = {255, 255, 255};
+    SDL_Color buttonColor = {0, 0, 255};
+    SDL_Color hoverColor = {0, 255, 0};
+
+    // Rectangle pour le titre
+    SDL_Rect titleRect = {SCREEN_WIDTH / 2 - 200, 20, 400, 50};
+    SDL_Texture* titleText = createTextTexture("Tutoriel", textColor);
+
+    // Textures pour les instructions
+    SDL_Texture* instruction1 = createTextTexture("Utilisez les fleches directionnelles pour vous deplacer", textColor);
+    SDL_Texture* instruction2 = createTextTexture("Evitez les balles qui rebondissent", textColor);
+    SDL_Texture* instruction3 = createTextTexture("Appuyez sur ECHAP pour mettre le jeu en pause", textColor);
+    SDL_Texture* instruction4 = createTextTexture("Survivez le plus longtemps possible !", textColor);
+
+    // Rectangles pour les instructions
+    SDL_Rect instruction1Rect = {SCREEN_WIDTH / 2 - 300, 100, 600, 40};
+    SDL_Rect instruction2Rect = {SCREEN_WIDTH / 2 - 300, 160, 600, 40};
+    SDL_Rect instruction3Rect = {SCREEN_WIDTH / 2 - 300, 220, 600, 40};
+    SDL_Rect instruction4Rect = {SCREEN_WIDTH / 2 - 300, 280, 600, 40};
+
+    // Rectangle pour le bouton Commencer
+    SDL_Rect startButtonRect = {SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT - 100, 200, 50};
+    SDL_Texture* startText = createTextTexture("Commencer", textColor);
+
+    // Animation des flèches
+    SDL_Texture* arrowKeys = loadTexture("assets/arrow_keys.png");
+    SDL_Rect arrowRect = {SCREEN_WIDTH / 2 - 100, 350, 200, 200};
+    float arrowScale = 1.0f;
+    bool increasing = true;
+
+    Uint32 lastTime = SDL_GetTicks();
+    const float ANIMATION_SPEED = 0.5f;
+
+    while (running) {
+        Uint32 currentTime = SDL_GetTicks();
+        float deltaTime = (currentTime - lastTime) / 1000.0f;
+        lastTime = currentTime;
+
+        // Animation des flèches
+        if (increasing) {
+            arrowScale += ANIMATION_SPEED * deltaTime;
+            if (arrowScale >= 1.2f) increasing = false;
+        } else {
+            arrowScale -= ANIMATION_SPEED * deltaTime;
+            if (arrowScale <= 1.0f) increasing = true;
+        }
+
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                running = false;
+                exit(0);
+            } else if (event.type == SDL_MOUSEBUTTONDOWN) {
+                int x, y;
+                SDL_GetMouseState(&x, &y);
+
+                if (x >= startButtonRect.x && x < startButtonRect.x + startButtonRect.w &&
+                    y >= startButtonRect.y && y < startButtonRect.y + startButtonRect.h) {
+                    Mix_PlayChannel(-1, buttonSound, 0);
+                    running = false;
+                }
+            }
+        }
+
+        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, menuBackgroundTexture, NULL, NULL);
+
+        // Afficher le titre
+        SDL_RenderCopy(renderer, titleText, NULL, &titleRect);
+
+        // Afficher les instructions
+        SDL_RenderCopy(renderer, instruction1, NULL, &instruction1Rect);
+        SDL_RenderCopy(renderer, instruction2, NULL, &instruction2Rect);
+        SDL_RenderCopy(renderer, instruction3, NULL, &instruction3Rect);
+        SDL_RenderCopy(renderer, instruction4, NULL, &instruction4Rect);
+
+        // Afficher l'animation des flèches
+        if (arrowKeys) {
+            SDL_Rect scaledArrowRect = {
+                arrowRect.x - (arrowRect.w * (arrowScale - 1.0f)) / 2,
+                arrowRect.y - (arrowRect.h * (arrowScale - 1.0f)) / 2,
+                arrowRect.w * arrowScale,
+                arrowRect.h * arrowScale
+            };
+            SDL_RenderCopy(renderer, arrowKeys, NULL, &scaledArrowRect);
+        }
+
+        // Afficher le bouton Commencer
+        int x, y;
+        SDL_GetMouseState(&x, &y);
+        if (x >= startButtonRect.x && x < startButtonRect.x + startButtonRect.w &&
+            y >= startButtonRect.y && y < startButtonRect.y + startButtonRect.h) {
+            drawRoundedRect(renderer, startButtonRect, 20, hoverColor);
+        } else {
+            drawRoundedRect(renderer, startButtonRect, 20, buttonColor);
+        }
+        SDL_Rect startTextRect = {startButtonRect.x + 50, startButtonRect.y + 10, 100, 30};
+        SDL_RenderCopy(renderer, startText, NULL, &startTextRect);
+
+        SDL_RenderPresent(renderer);
+        SDL_Delay(16);
+    }
+
+    // Nettoyer les ressources
+    SDL_DestroyTexture(titleText);
+    SDL_DestroyTexture(instruction1);
+    SDL_DestroyTexture(instruction2);
+    SDL_DestroyTexture(instruction3);
+    SDL_DestroyTexture(instruction4);
+    SDL_DestroyTexture(startText);
+    if (arrowKeys) SDL_DestroyTexture(arrowKeys);
+}
+
 void selectDifficulty() {
     bool running = true;
     SDL_Event event;
@@ -848,13 +964,14 @@ void selectDifficulty() {
                     y > easyButtonRect.y && y < easyButtonRect.y + easyButtonRect.h) {
                     currentBallCount = EASY_BALLS;
                     currentBallSpeed = EASY_SPEED;
+                    Mix_PlayChannel(-1, buttonSound, 0);
+                    displayTutorial();
                     if (balls) free(balls);
                     balls = (Ball*)malloc(currentBallCount * sizeof(Ball));
                     if (!balls) {
                         printf("Erreur d'allocation memoire pour les balles\n");
                         exit(1);
                     }
-                    running = false;
                     SDL_DestroyTexture(titleText);
                     SDL_DestroyTexture(easyText);
                     SDL_DestroyTexture(mediumText);
@@ -866,13 +983,14 @@ void selectDifficulty() {
                          y > mediumButtonRect.y && y < mediumButtonRect.y + mediumButtonRect.h) {
                     currentBallCount = MEDIUM_BALLS;
                     currentBallSpeed = MEDIUM_SPEED;
+                    Mix_PlayChannel(-1, buttonSound, 0);
+                    displayTutorial();
                     if (balls) free(balls);
                     balls = (Ball*)malloc(currentBallCount * sizeof(Ball));
                     if (!balls) {
                         printf("Erreur d'allocation memoire pour les balles\n");
                         exit(1);
                     }
-                    running = false;
                     SDL_DestroyTexture(titleText);
                     SDL_DestroyTexture(easyText);
                     SDL_DestroyTexture(mediumText);
@@ -884,13 +1002,14 @@ void selectDifficulty() {
                          y > hardButtonRect.y && y < hardButtonRect.y + hardButtonRect.h) {
                     currentBallCount = HARD_BALLS;
                     currentBallSpeed = HARD_SPEED;
+                    Mix_PlayChannel(-1, buttonSound, 0);
+                    displayTutorial();
                     if (balls) free(balls);
                     balls = (Ball*)malloc(currentBallCount * sizeof(Ball));
                     if (!balls) {
                         printf("Erreur d'allocation memoire pour les balles\n");
                         exit(1);
                     }
-                    running = false;
                     SDL_DestroyTexture(titleText);
                     SDL_DestroyTexture(easyText);
                     SDL_DestroyTexture(mediumText);
