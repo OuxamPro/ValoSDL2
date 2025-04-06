@@ -1,37 +1,38 @@
-# Compilateur
+# Compilateur et options
 CC = gcc
-
-# Flags de compilation
 CFLAGS = -Wall -Wextra -g
-SDL_CFLAGS = $(shell sdl2-config --cflags)
-SDL_LIBS = $(shell sdl2-config --libs) -lSDL2_image -lSDL2_ttf -lmysqlclient
+LDFLAGS = -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_mixer -lmysqlclient -lm
 
-# Nom de l'exécutable
-TARGET = game
+# Chemins d'inclusion
+INCLUDES = -I/opt/homebrew/include/SDL2 -I/opt/homebrew/opt/mysql-client/include
 
-# Fichiers source
-SRCS = game.c
+# Chemins des bibliothèques
+LIBRARIES = -L/opt/homebrew/lib -L/opt/homebrew/opt/mysql-client/lib
 
-# Fichiers objets
-OBJS = $(SRCS:.c=.o)
+# Fichiers source et objet
+SRC = game.c
+OBJ = $(SRC:.c=.o)
+EXEC = gameBase
 
-# Règle par défaut
-all: $(TARGET)
+# Règles de compilation
+all: $(EXEC)
 
-# Règle de compilation
-$(TARGET): $(OBJS)
-	$(CC) $(OBJS) -o $(TARGET) $(SDL_LIBS)
+$(EXEC): $(OBJ)
+	$(CC) $(OBJ) -o $(EXEC) $(LIBRARIES) $(LDFLAGS)
 
-# Règle pour les fichiers objets
 %.o: %.c
-	$(CC) $(CFLAGS) $(SDL_CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+# Installation des dépendances
+install-deps:
+	brew install sdl2 sdl2_image sdl2_ttf sdl2_mixer mysql-client
 
 # Nettoyage
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f $(OBJ) $(EXEC)
 
-# Installation des dépendances (macOS)
-install-deps:
-	brew install sdl2 sdl2_image sdl2_ttf mysql
+# Création des dossiers nécessaires
+setup:
+	mkdir -p sounds user
 
-.PHONY: all clean install-deps 
+.PHONY: all clean install-deps setup 
