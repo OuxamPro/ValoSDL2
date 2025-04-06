@@ -1,0 +1,24 @@
+# Fichiers compilés et exécutables
+*.o
+*.out
+game
+gameBase
+test
+sd
+
+# Fichiers système macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Fichiers de configuration IDE
+.vscode/
+.idea/
+
+# Fichiers temporaires et sauvegardes
+*.db
+sauvegarde2.c
+sauveragarde.c
+test.c
