@@ -120,6 +120,7 @@ void displayScores();
 void insertScore(MYSQL *con, const char* nom, int time, const char* difficulte);
 void selectDifficulty();
 void selectCharacter();
+void displayPauseMenu();
 
 SDL_Texture* loadTexture(const char* path) {
     SDL_Surface* surface = IMG_Load(path);
@@ -593,6 +594,93 @@ void insertScore(MYSQL *con, const char* nom, int time, const char* difficulte) 
     printf("Score inséré : %s - %d s - %s\n", nom, time, difficulte);
 }
 
+void displayPauseMenu() {
+    bool running = true;
+    SDL_Event event;
+    SDL_Color textColor = {255, 255, 255};
+    SDL_Color buttonColor = {0, 0, 255};
+    SDL_Color hoverColor = {0, 255, 0};
+
+    // Rectangle pour le titre
+    SDL_Rect titleRect = {SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2 - 100, 200, 50};
+    SDL_Texture* titleText = createTextTexture("PAUSE", textColor);
+
+    // Rectangles pour les boutons
+    SDL_Rect resumeButtonRect = {SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2, 200, 50};
+    SDL_Rect quitButtonRect = {SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2 + 60, 200, 50};
+
+    // Textures pour les textes des boutons
+    SDL_Texture* resumeText = createTextTexture("Reprendre", textColor);
+    SDL_Texture* quitText = createTextTexture("Quitter", textColor);
+
+    while (running) {
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                running = false;
+                exit(0);
+            } else if (event.type == SDL_KEYDOWN) {
+                if (event.key.keysym.sym == SDLK_ESCAPE) {
+                    running = false;
+                    return;
+                }
+            } else if (event.type == SDL_MOUSEBUTTONDOWN) {
+                int x, y;
+                SDL_GetMouseState(&x, &y);
+
+                if (x > resumeButtonRect.x && x < resumeButtonRect.x + resumeButtonRect.w &&
+                    y > resumeButtonRect.y && y < resumeButtonRect.y + resumeButtonRect.h) {
+                    running = false;
+                    return;
+                }
+                else if (x > quitButtonRect.x && x < quitButtonRect.x + quitButtonRect.w &&
+                         y > quitButtonRect.y && y < quitButtonRect.y + quitButtonRect.h) {
+                    running = false;
+                    exit(0);
+                }
+            }
+        }
+
+        // Rendre l'écran semi-transparent
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 128);
+        SDL_RenderClear(renderer);
+
+        // Afficher le titre
+        SDL_RenderCopy(renderer, titleText, NULL, &titleRect);
+
+        // Afficher les boutons
+        int x, y;
+        SDL_GetMouseState(&x, &y);
+
+        // Bouton Reprendre
+        if (x > resumeButtonRect.x && x < resumeButtonRect.x + resumeButtonRect.w &&
+            y > resumeButtonRect.y && y < resumeButtonRect.y + resumeButtonRect.h) {
+            drawRoundedRect(renderer, resumeButtonRect, 20, hoverColor);
+        } else {
+            drawRoundedRect(renderer, resumeButtonRect, 20, buttonColor);
+        }
+        SDL_Rect resumeTextRect = {resumeButtonRect.x + 50, resumeButtonRect.y + 10, 100, 30};
+        SDL_RenderCopy(renderer, resumeText, NULL, &resumeTextRect);
+
+        // Bouton Quitter
+        if (x > quitButtonRect.x && x < quitButtonRect.x + quitButtonRect.w &&
+            y > quitButtonRect.y && y < quitButtonRect.y + quitButtonRect.h) {
+            drawRoundedRect(renderer, quitButtonRect, 20, hoverColor);
+        } else {
+            drawRoundedRect(renderer, quitButtonRect, 20, buttonColor);
+        }
+        SDL_Rect quitTextRect = {quitButtonRect.x + 50, quitButtonRect.y + 10, 100, 30};
+        SDL_RenderCopy(renderer, quitText, NULL, &quitTextRect);
+
+        SDL_RenderPresent(renderer);
+        SDL_Delay(16);
+    }
+
+    // Nettoyer les ressources
+    SDL_DestroyTexture(titleText);
+    SDL_DestroyTexture(resumeText);
+    SDL_DestroyTexture(quitText);
+}
+
 void startGame() {
     player.w = 50;
     player.h = 50;
@@ -602,54 +690,77 @@ void startGame() {
     startTime = SDL_GetTicks();
     bool running = true;
     SDL_Event event;
+
     while (running) {
+        // Gestion des événements
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT)
+            if (event.type == SDL_QUIT) {
                 running = false;
+            } else if (event.type == SDL_KEYDOWN) {
+                if (event.key.keysym.sym == SDLK_ESCAPE) {
+                    displayPauseMenu();
+                }
+            }
         }
+
+        // Gestion des mouvements du joueur
         const Uint8* keys = SDL_GetKeyboardState(NULL);
         if (keys[SDL_SCANCODE_UP] && player.y > 0) player.y -= PLAYER_SPEED;
         if (keys[SDL_SCANCODE_DOWN] && player.y + player.h < SCREEN_HEIGHT) player.y += PLAYER_SPEED;
         if (keys[SDL_SCANCODE_LEFT] && player.x > 0) player.x -= PLAYER_SPEED;
         if (keys[SDL_SCANCODE_RIGHT] && player.x + player.w < SCREEN_WIDTH) player.x += PLAYER_SPEED;
-        moveBalls();
-        for (int i = 0; i < currentBallCount; i++) {
-            if (checkCollision(player, balls[i])) {
-                printf("Collision détectée ! Game Over.\n");
-                displayGameOver(startTime);
-                free(balls); // Libérer la mémoire des balles
-                balls = NULL;
-                displayMenu();
-                return;
+
+        // Mouvement des balles
+        if (balls != NULL) {
+            moveBalls();
+        }
+
+        // Vérification des collisions
+        bool collision = false;
+        if (balls != NULL) {
+            for (int i = 0; i < currentBallCount; i++) {
+                if (checkCollision(player, balls[i])) {
+                    collision = true;
+                    break;
+                }
             }
         }
+
+        if (collision) {
+            displayGameOver(startTime);
+            if (balls != NULL) {
+                free(balls);
+                balls = NULL;
+            }
+            displayMenu();
+            return;
+        }
+
+        // Rendu
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, backgroundTexture, NULL, NULL);
         SDL_RenderCopy(renderer, playerTexture, NULL, &player);
-        
-        // Dessiner les balles avec l'image Smoke.png
-        for (int i = 0; i < currentBallCount; i++) {
-            SDL_Rect ballRect = {
-                balls[i].x - BALL_RADIUS,
-                balls[i].y - BALL_RADIUS,
-                BALL_RADIUS * 2,
-                BALL_RADIUS * 2
-            };
-            SDL_RenderCopy(renderer, ballTexture, NULL, &ballRect);
-            
-            // Pour le débogage : dessiner la hitbox en rouge transparent
-            /*SDL_SetRenderDrawColor(renderer, 255, 0, 0, 100);
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            drawCircle(renderer, balls[i].x, balls[i].y, BALL_RADIUS);
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);*/
+
+        // Dessiner les balles
+        if (balls != NULL) {
+            for (int i = 0; i < currentBallCount; i++) {
+                SDL_Rect ballRect = {
+                    balls[i].x - BALL_RADIUS,
+                    balls[i].y - BALL_RADIUS,
+                    BALL_RADIUS * 2,
+                    BALL_RADIUS * 2
+                };
+                SDL_RenderCopy(renderer, ballTexture, NULL, &ballRect);
+            }
         }
-        
+
         displayTime(startTime);
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
     }
-    
-    if (balls) {
+
+    // Nettoyage
+    if (balls != NULL) {
         free(balls);
         balls = NULL;
     }
