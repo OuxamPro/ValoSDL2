@@ -914,7 +914,7 @@ void selectCharacter() {
     SDL_Color textColor = {255, 255, 255};
     SDL_Color buttonColor = {0, 0, 255};
     SDL_Color hoverColor = {0, 255, 0};
-    SDL_Color selectedColor = {255, 165, 0}; // Orange pour le personnage sélectionné
+    SDL_Color selectedColor = {255, 165, 0};
 
     // Rectangle pour le titre
     SDL_Rect titleRect = {SCREEN_WIDTH / 2 - 200, 20, 400, 50};
@@ -931,6 +931,22 @@ void selectCharacter() {
     };
     int numCharacters = sizeof(characterFiles) / sizeof(characterFiles[0]);
     SDL_Texture** characterTextures = malloc(numCharacters * sizeof(SDL_Texture*));
+    
+    // Variables pour les animations
+    float* characterScales = malloc(numCharacters * sizeof(float));
+    float* characterPulses = malloc(numCharacters * sizeof(float));
+    Uint32* hoverStartTimes = malloc(numCharacters * sizeof(Uint32));
+    Uint32* selectStartTimes = malloc(numCharacters * sizeof(Uint32));
+    bool* isHovered = malloc(numCharacters * sizeof(bool));
+    
+    // Initialiser les animations
+    for (int i = 0; i < numCharacters; i++) {
+        characterScales[i] = 1.0f;
+        characterPulses[i] = 0.0f;
+        hoverStartTimes[i] = 0;
+        selectStartTimes[i] = 0;
+        isHovered[i] = false;
+    }
     
     // Charger toutes les textures
     for (int i = 0; i < numCharacters; i++) {
@@ -960,7 +976,17 @@ void selectCharacter() {
     bool characterSelected = false;
     int selectedIndex = -1;
 
+    Uint32 lastTime = SDL_GetTicks();
+    const float ANIMATION_SPEED = 0.5f;
+    const float PULSE_SPEED = 0.02f;
+    const float MAX_SCALE = 1.2f;
+    const float MIN_SCALE = 1.0f;
+
     while (running) {
+        Uint32 currentTime = SDL_GetTicks();
+        float deltaTime = (currentTime - lastTime) / 1000.0f;
+        lastTime = currentTime;
+
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 running = false;
@@ -975,6 +1001,7 @@ void selectCharacter() {
                         selectedIndex = i;
                         characterSelected = true;
                         strcpy(selectedCharacter, characterFiles[i]);
+                        selectStartTimes[i] = currentTime;
                         break;
                     }
                 }
@@ -992,6 +1019,11 @@ void selectCharacter() {
                     }
                     free(characterTextures);
                     free(characterRects);
+                    free(characterScales);
+                    free(characterPulses);
+                    free(hoverStartTimes);
+                    free(selectStartTimes);
+                    free(isHovered);
                     
                     // Charger la nouvelle texture du joueur
                     if (playerTexture) {
@@ -1004,21 +1036,64 @@ void selectCharacter() {
             }
         }
 
+        // Mise à jour des animations
+        int x, y;
+        SDL_GetMouseState(&x, &y);
+
+        for (int i = 0; i < numCharacters; i++) {
+            bool isHovering = (x >= characterRects[i].x && x < characterRects[i].x + characterRects[i].w &&
+                             y >= characterRects[i].y && y < characterRects[i].y + characterRects[i].h);
+
+            // Animation de survol
+            if (isHovering != isHovered[i]) {
+                isHovered[i] = isHovering;
+                hoverStartTimes[i] = currentTime;
+            }
+
+            // Animation de zoom au survol
+            float targetScale = isHovering ? MAX_SCALE : MIN_SCALE;
+            characterScales[i] += (targetScale - characterScales[i]) * ANIMATION_SPEED * deltaTime;
+
+            // Animation de pulse pour le personnage sélectionné
+            if (i == selectedIndex) {
+                characterPulses[i] = sin((currentTime - selectStartTimes[i]) * PULSE_SPEED) * 0.1f + 1.0f;
+            } else {
+                characterPulses[i] = 1.0f;
+            }
+        }
+
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, menuBackgroundTexture, NULL, NULL);
 
         // Afficher le titre
         SDL_RenderCopy(renderer, titleText, NULL, &titleRect);
 
-        // Afficher tous les personnages
+        // Afficher tous les personnages avec animations
         for (int i = 0; i < numCharacters; i++) {
+            SDL_Rect destRect = characterRects[i];
+            float finalScale = characterScales[i] * characterPulses[i];
+            
+            // Calculer la nouvelle taille et position pour l'effet de zoom
+            int newWidth = destRect.w * finalScale;
+            int newHeight = destRect.h * finalScale;
+            int offsetX = (newWidth - destRect.w) / 2;
+            int offsetY = (newHeight - destRect.h) / 2;
+            
+            SDL_Rect scaledRect = {
+                destRect.x - offsetX,
+                destRect.y - offsetY,
+                newWidth,
+                newHeight
+            };
+
             // Afficher l'image du personnage avec un fond orange si sélectionné
             if (i == selectedIndex) {
                 SDL_SetRenderDrawColor(renderer, selectedColor.r, selectedColor.g, selectedColor.b, 255);
-                SDL_RenderFillRect(renderer, &characterRects[i]);
+                SDL_RenderFillRect(renderer, &scaledRect);
             }
+            
             if (characterTextures[i]) {
-                SDL_RenderCopy(renderer, characterTextures[i], NULL, &characterRects[i]);
+                SDL_RenderCopy(renderer, characterTextures[i], NULL, &scaledRect);
             }
         }
 
@@ -1048,6 +1123,11 @@ void selectCharacter() {
     }
     free(characterTextures);
     free(characterRects);
+    free(characterScales);
+    free(characterPulses);
+    free(hoverStartTimes);
+    free(selectStartTimes);
+    free(isHovered);
 }
 
 int main(int argc, char* argv[]) {
