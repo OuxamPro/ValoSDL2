@@ -1,4 +1,6 @@
-# Jeu SDL2
+# ValoSDL
+
+Par Maxime Quesnel élève en B2 à L'ESGI Grenoble pour le projet de fin de semestre en C.
 
 Un jeu d'arcade développé en C avec SDL2, comprenant :
 - Un menu principal avec sélection de personnage
