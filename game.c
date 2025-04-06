@@ -1,6 +1,7 @@
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_ttf.h>
+#include <SDL_mixer.h>
 #include <mysql/mysql.h>
 #include <stdbool.h>
 #include <time.h>
@@ -49,6 +50,45 @@ Uint32 startTime;
 Score topScores[10];
 
 char selectedCharacter[256] = "user/phoenix.png"; // Variable globale pour stocker le personnage sélectionné
+
+// Variables globales pour l'audio
+Mix_Music* backgroundMusic = NULL;
+Mix_Chunk* selectSound = NULL;
+Mix_Chunk* collisionSound = NULL;
+Mix_Chunk* buttonSound = NULL;
+Mix_Chunk* pauseSound = NULL;
+
+void initAudio() {
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
+        printf("Erreur d'initialisation de SDL_mixer: %s\n", Mix_GetError());
+        return;
+    }
+
+    // Charger les sons
+    backgroundMusic = Mix_LoadMUS("sounds/background.mp3");
+    selectSound = Mix_LoadWAV("sounds/select.wav");
+    collisionSound = Mix_LoadWAV("sounds/collision.wav");
+    buttonSound = Mix_LoadWAV("sounds/button.wav");
+    pauseSound = Mix_LoadWAV("sounds/pause.wav");
+
+    // Vérifier le chargement des sons
+    if (!backgroundMusic || !selectSound || !collisionSound || !buttonSound || !pauseSound) {
+        printf("Erreur de chargement des sons: %s\n", Mix_GetError());
+    }
+
+    // Définir le volume
+    Mix_VolumeMusic(50); // Volume de la musique à 50%
+    Mix_Volume(-1, 64); // Volume des effets sonores à 64
+}
+
+void cleanupAudio() {
+    if (backgroundMusic) Mix_FreeMusic(backgroundMusic);
+    if (selectSound) Mix_FreeChunk(selectSound);
+    if (collisionSound) Mix_FreeChunk(collisionSound);
+    if (buttonSound) Mix_FreeChunk(buttonSound);
+    if (pauseSound) Mix_FreeChunk(pauseSound);
+    Mix_CloseAudio();
+}
 
 void finish_with_error(MYSQL *con) {
     fprintf(stderr, "%s\n", mysql_error(con));
@@ -629,11 +669,13 @@ void displayPauseMenu() {
 
                 if (x > resumeButtonRect.x && x < resumeButtonRect.x + resumeButtonRect.w &&
                     y > resumeButtonRect.y && y < resumeButtonRect.y + resumeButtonRect.h) {
+                    Mix_PlayChannel(-1, buttonSound, 0);
                     running = false;
                     return;
                 }
                 else if (x > quitButtonRect.x && x < quitButtonRect.x + quitButtonRect.w &&
                          y > quitButtonRect.y && y < quitButtonRect.y + quitButtonRect.h) {
+                    Mix_PlayChannel(-1, buttonSound, 0);
                     running = false;
                     exit(0);
                 }
@@ -691,6 +733,9 @@ void startGame() {
     bool running = true;
     SDL_Event event;
 
+    // Jouer la musique de fond
+    Mix_PlayMusic(backgroundMusic, -1); // -1 pour jouer en boucle
+    
     while (running) {
         // Gestion des événements
         while (SDL_PollEvent(&event)) {
@@ -727,6 +772,7 @@ void startGame() {
         }
 
         if (collision) {
+            Mix_PlayChannel(-1, collisionSound, 0); // Jouer le son de collision
             displayGameOver(startTime);
             if (balls != NULL) {
                 free(balls);
@@ -764,6 +810,9 @@ void startGame() {
         free(balls);
         balls = NULL;
     }
+
+    // Arrêter la musique
+    Mix_HaltMusic();
 }
 
 void selectDifficulty() {
@@ -1002,6 +1051,7 @@ void selectCharacter() {
                         characterSelected = true;
                         strcpy(selectedCharacter, characterFiles[i]);
                         selectStartTimes[i] = currentTime;
+                        Mix_PlayChannel(-1, selectSound, 0); // Jouer le son de sélection
                         break;
                     }
                 }
@@ -1009,6 +1059,7 @@ void selectCharacter() {
                 // Vérifier le clic sur le bouton Continuer
                 if (characterSelected && x >= continueButtonRect.x && x < continueButtonRect.x + continueButtonRect.w &&
                     y >= continueButtonRect.y && y < continueButtonRect.y + continueButtonRect.h) {
+                    Mix_PlayChannel(-1, buttonSound, 0); // Jouer le son du bouton
                     running = false;
                     
                     // Nettoyer les ressources
@@ -1131,8 +1182,11 @@ void selectCharacter() {
 }
 
 int main(int argc, char* argv[]) {
-    if (SDL_Init(SDL_INIT_VIDEO) < 0 || IMG_Init(IMG_INIT_PNG) == 0 || TTF_Init() == -1) {
-        printf("Erreur SDL : %s\n", SDL_GetError());
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0 || 
+        IMG_Init(IMG_INIT_PNG) == 0 || 
+        TTF_Init() == -1 ||
+        Mix_Init(MIX_INIT_MP3) == 0) {
+        printf("Erreur d'initialisation: %s\n", SDL_GetError());
         return 1;
     }
     window = SDL_CreateWindow("Jeu SDL2", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
@@ -1158,6 +1212,8 @@ int main(int argc, char* argv[]) {
     createDatabase(con);
     mysql_close(con);
 
+    initAudio();
+
     displayMenu();
 
     SDL_DestroyTexture(playerTexture);
@@ -1169,5 +1225,7 @@ int main(int argc, char* argv[]) {
     IMG_Quit();
     TTF_Quit();
     SDL_Quit();
+
+    cleanupAudio();
     return 0;
 }
